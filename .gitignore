@@ -51,7 +51,6 @@ Thumbs.db
 .Python
 cmake-build-debug/
 build/
-lib/
 lib64/
 parts/
 sdist/
