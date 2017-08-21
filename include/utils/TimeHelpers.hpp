@@ -116,7 +116,7 @@ class Spinner : public TimeManager{
 
 
 public:
-    Spinner() : TimeManager(), _rate(0),_firstrun(true)
+    Spinner(int r) : TimeManager(), _rate(r),_firstrun(true),_noW(false),_deadlineNotRespected(false)
     {
         useNano();
     }
@@ -124,6 +124,12 @@ public:
     void setRate(int hz){
         if (hz > 0)
             _rate = hz;
+    }
+    void suppressWarnings(){
+        _noW = true;
+    }
+    void enableWarnings(){
+        _noW = false;
     }
 
     //Implements the waiting logic
@@ -154,12 +160,12 @@ public:
                 usleep((__useconds_t)(sleepTime / MICRO2SECS));
 
             }else{
-
+                _deadlineNotRespected = true;
                 //Your loop is to slow
                 std::cout << "WARNING: your loop takes too long. Decrease your rate value" << std::endl;
 
                 //Exit
-                return false;
+                return _noW;
             }
         }
         //Start readings
@@ -171,6 +177,8 @@ public:
 private:
     int _rate;
     bool _firstrun;
+    bool _noW;
+    bool _deadlineNotRespected;
     void reset(){
         _prevTime = _actualTime;
     }
@@ -193,7 +201,6 @@ private:
     //duration in seconds
     int _duration;
     long int _start;
-
 };
 
 #endif //WAVERECORDER_TIMEHELPERS_HPP
