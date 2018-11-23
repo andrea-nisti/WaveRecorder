@@ -10,33 +10,47 @@
 int main(int argc, char** argv){
 
     TimeManager timer;
-    Spinner spinner;
+    Spinner spinner(20);
     WaveGen w;
-    double maxw = 3;
-    double minw = 0.5;
-    double U    = 5;
+    double maxw = 1.3;
+    double minw = 0.2;
+    double U    = 6;
 
-    w.init(5,maxw,minw,U);
-    w.info();
-
-    spinner.setRate(20);
+    spinner.suppressWarnings();
     lcm::LCM handler;
     geometry::pose platPose;
 
+    int n;
+    int ns;
+    int secs;
+    std::cout << "How many file should I generate?" << std::endl;
+    std::cin >> n;
+    std::cout << "For how much time (seconds)?" << std::endl;
+    std::cin >> secs;
+    std::cout << "Max freq: " << std::endl;
+    std::cin >> maxw;
+    std::cout << "Min freq: " << std::endl;
+    std::cin >> minw;
+    std::cout << "Wind speed: " << std::endl;
+    std::cin >> U;
+    std::cout << "Finally, how many sinusoids?: " << std::endl;
+    std::cin >> ns;
 
 
-    for (int j = 1; j < 4; ++j) {
+
+
+    for (int j = 0; j < n; ++j) {
         Logger log;
         std::ostringstream ss;
         ss <<"../log/"<< j <<"_waveLog_" <<minw<<"_"<<maxw<<".txt";
         log.useFile(ss.str());
 
-        w.init(5,maxw,minw,U);
+        w.init(ns,maxw,minw,U);
         timer.updateTimer();
         long int start = timer._actualTime;
         double max = 0;
         double min = 0;
-        while((timer._actualTime - start) * MILLI2SECS < (60 * 4) && spinner.ok() ) {
+        while((timer._actualTime - start) * MILLI2SECS < (secs) && spinner.ok() ) {
 
             timer.updateTimer();
             double h = w.generateWaveHeightAtPoint(0,0,timer._actualTime * MILLI2SECS);
@@ -54,7 +68,10 @@ int main(int argc, char** argv){
         //log info
         std::string s = w.info().str();
         log << s;
-        log <<"Min and Max h: " <<std::endl<<min << " " << max <<std::endl;
+
+        log <<"Max:" <<std::endl<<max <<std::endl;
+        log <<"Min:" <<std::endl<<min <<std::endl;
+
     }
 
 	return 0;

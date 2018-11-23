@@ -7,12 +7,17 @@
 #include "strtk/strtk.hpp"
 #include "utils/TimeHelpers.hpp"
 #include "utils/QtTcpSender.hpp"
-
+#define MIN_ALPHA 0.05
+#define MAX_ALPHA 1.0
+#define J_OFF -0.08
+#define L_ARM 0.7
 typedef std::vector<std::string> stringv_t;
 typedef std::vector<double> doublev_t;
 
 bool readPathInString(std::string, stringv_t&);
+void readMinMax(std::string name, double& min, double& max);
 double string2Double(std::string);
+bool calculateAlpha(double&,double,double);
 
 int main(int argc, char** argv){
     const std::string logPath = "../log/";
@@ -33,53 +38,54 @@ int main(int argc, char** argv){
     }
 
     //Playback, paths were recorded at 20Hz
-    Spinner sp;
+    Spinner sp(7);
     TimeManager tm;
-    sp.setRate(10);
 
     //Some time helpers
-    int l = 0;
     tm.updateTimer();
 
     //Prepare socket
-    QtTcpSender sock("192.168.1.160", 7007);
+    QtTcpSender sock("192.168.0.160", 7007);
     sock.connect();
     if(sock.isConnected()){
         std::cout << "sending def position" << std::endl;
-        doublev_t* defPosition = new doublev_t{0, -1, 0.93, 0, 0, 0};
+        doublev_t* defPosition = new doublev_t{2.9, -1, 0.93, 0, 0, 0};
         sock.reference(defPosition);
         sock.sendOverTcp();
         usleep((useconds_t)(5 / MICRO2SECS));
         delete defPosition;
     }
+
+    //Calculate wave parameters
+    double min,max;
+    readMinMax(logPath+fd+".txt",min,max);
+
+    //Remark: straight robot position is -1.5 and flat is 0. We consider 1.5 and 0, after we negate it for simplicity
+    double minh = L_ARM * std::sin(MIN_ALPHA);
+    double h0 = fabs(min) + minh;
+    int l = 0;
+
+
     std::cout << "starting" << std::endl;
     tm.updateTimer();
-    long int start = tm._actualTime;
-    while (/*sp.ok() && l<path.size() && */sock.isConnected()){
-
-/*
+    bool sent = true;
+    while (sp.ok() && l<path.size() && sock.isConnected()){
+        /*
         std::cout<<"Enter new refs: ";
         std::cin>>sock.reference()[0]>>sock.reference()[1]>>sock.reference()[2]>>sock.reference()[3]>>sock.reference()[4]>>sock.reference()[5];
+         double a = -1 + 0.5*sin(0.7 * (tm._actualTime - start)*tm.toSecs());
 */
-        double a = -1 + 0.5*sin(0.7 * (tm._actualTime - start)*tm.toSecs());
-        sock.reference()[1] = a;
-        sock.reference()[2] = -a-0.08;
-        sock.sendOverTcp();
+        double a;
+        if(calculateAlpha(a,path[l++],h0)){
 
+            sock.reference()[1] = a;
+            sock.reference()[2] = -a + J_OFF;
+            sock.sendOverTcp();
+            std::cout << a << std::endl;
+        }
 
-
-        /*
-        double h = path[l++];
-        //Send via socket
-        std::cout << h << std::endl;
-        */
-
-        sock.sendOverTcp();
         tm.updateTimer();
     }
-    tm.updateTimer();
-    std::cout << "It took "<< tm._dt<<" seconds!" << std::endl;
-
 
     return 0;
 }
@@ -107,6 +113,36 @@ bool readPathInString(std::string name, stringv_t& path){
     }
 
 }
+void readMinMax(std::string name, double& min, double& max){
+
+    bool done = false;
+    bool maxFound = false;
+    bool minFound = false;
+    std::ifstream myfile (name);
+    std::string line;
+    while (!done){
+
+        getline (myfile,line);
+
+        if(line == "Max:"){
+            getline (myfile,line);
+            max=string2Double(line);
+            maxFound = true;
+
+        }
+        if(line == "Min:"){
+            getline (myfile,line);
+            min=string2Double(line);
+            minFound = true;
+        }
+
+        done = minFound && maxFound;
+
+    }
+    std::cout << min << std::endl;
+    std::cout << max << std::endl;
+
+}
 double string2Double(std::string str){
 
     char *cstr = new char[str.length() + 1];
@@ -114,5 +150,22 @@ double string2Double(std::string str){
     double value = atof(cstr);
     delete (cstr);
     return value;
+
+}
+
+bool calculateAlpha(double& a,double h ,double h0){
+
+    double arg = (h+h0)/L_ARM;
+    if(arg > 1) arg  = 1;
+    if(arg < -1) arg = -1;
+
+    a = std::asin(arg);
+    if(a<0) return false;
+    //Clamp between min and max
+    if(a >= MAX_ALPHA) a = MAX_ALPHA;
+    if(a <= MIN_ALPHA) a = MIN_ALPHA;
+
+    a=-a;
+    return true;
 
 }
